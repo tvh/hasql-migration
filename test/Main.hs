@@ -1,16 +1,15 @@
 -- |
 -- Module      : Main
 -- Copyright   : (c) 2014 Andreas Meingast <ameingast@gmail.com>
+--               (c) 2016 Timo von Holtz <tvh@tvholtz.de>
 --
 -- License     : BSD-style
--- Maintainer  : ameingast@gmail.com
+-- Maintainer  : tvh@tvholtz.de
 -- Stability   : experimental
 -- Portability : GHC
 --
 -- The test entry-point for postgresql-simple-migration.
 
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main

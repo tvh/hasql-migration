@@ -1,13 +1,14 @@
 -- |
 -- Module      : Database.PostgreSQL.Simple.MigrationTest
 -- Copyright   : (c) 2014 Andreas Meingast <ameingast@gmail.com>
+--               (c) 2016 Timo von Holtz <tvh@tvholtz.de>
 --
 -- License     : BSD-style
--- Maintainer  : ameingast@gmail.com
+-- Maintainer  : tvh@tvholtz.de
 -- Stability   : experimental
 -- Portability : GHC
 --
--- A collection of postgresql-simple-migration specifications.
+-- A collection of hasql-migration specifications.
 
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
