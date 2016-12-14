@@ -17,12 +17,13 @@ module Main
     ( main
     ) where
 
-import           Database.PostgreSQL.Simple               (connectPostgreSQL)
-import           Database.PostgreSQL.Simple.MigrationTest (migrationSpec)
-import           Database.PostgreSQL.Simple.Util          (withTransactionRolledBack)
+import Hasql.Connection
+import Hasql.MigrationTest
 import           Test.Hspec                               (hspec)
 
 main :: IO ()
 main = do
-    con <- connectPostgreSQL "dbname=test"
-    withTransactionRolledBack con (hspec (migrationSpec con))
+    con <- acquire "dbname=test"
+    case con of
+      Right con -> hspec (migrationSpec con)
+      Left err -> putStrLn $ show err
