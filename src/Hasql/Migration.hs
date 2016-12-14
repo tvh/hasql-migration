@@ -38,9 +38,11 @@ module Hasql.Migration
     ) where
 
 import Control.Arrow
+import Control.Applicative
 import Data.Default.Class
 import Data.Functor.Contravariant
 import Data.List (isPrefixOf, sort)
+import Data.Monoid
 import Data.Traversable (forM)
 import Data.Time (LocalTime)
 import Hasql.Migration.Util (existsTable)
