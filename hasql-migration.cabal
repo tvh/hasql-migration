@@ -15,14 +15,16 @@ description:                A PostgreSQL-simple schema migration utility
 
 extra-source-files:         License
                             Readme.markdown
-                            Changelog.markdown
+
+                            test/*.hs
+                            test/Hasql/*.hs
 
                             share/test/*.sql
                             share/test/scripts/*.sql
 
 source-repository head
     type:                   git
-    location:               git://github.com/ameingast/postgresql-simple-migration
+    location:               git://github.com/tvh/hasql-migration
 
 Library
     exposed-modules:        Hasql.Migration
