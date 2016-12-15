@@ -32,7 +32,6 @@ Library
                             Hasql.Migration.Util
     hs-source-dirs:         src
     ghc-options:            -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns
-    default-extensions:     OverloadedStrings, CPP, LambdaCase
     default-language:       Haskell2010
     build-depends:          base                        >= 4.7      && < 5.0,
                             base64-bytestring           >= 1.0      && < 1.1,
@@ -50,7 +49,6 @@ test-suite tests
     main-is:                Main.hs
     hs-source-dirs:         test
     ghc-options:            -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns
-    default-extensions:     OverloadedStrings, CPP, LambdaCase
     default-language:       Haskell2010
     type:                   exitcode-stdio-1.0
     build-depends:          base                        >= 4.7      && < 5.0,

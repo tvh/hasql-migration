@@ -1,7 +1,7 @@
 -- |
 -- Module      : Hasql.Migration.Util
--- Copyright   : (c) 2014-2016 Andreas Meingast <ameingast@gmail.com>
---               (c) 2016 Timo von Holtz <tvh@tvholtz.de>
+-- Copyright   : (c) 2016 Timo von Holtz <tvh@tvholtz.de>,
+--               (c) 2014-2016 Andreas Meingast <ameingast@gmail.com>
 --
 -- License     : BSD-style
 -- Maintainer  : tvh@tvholtz.de
@@ -10,8 +10,6 @@
 --
 -- A collection of utilites for database migrations.
 
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Hasql.Migration.Util

@@ -1,7 +1,7 @@
 -- |
 -- Module      : Hasql..Migration
--- Copyright   : (c) 2014 Andreas Meingast <ameingast@gmail.com>
---               (c) 2016 Timo von Holtz <tvh@tvholtz.de>
+-- Copyright   : (c) 2016 Timo von Holtz <tvh@tvholtz.de>,
+--               (c) 2014 Andreas Meingast <ameingast@gmail.com>
 --
 -- License     : BSD-style
 -- Maintainer  : tvh@tvholtz.de
@@ -9,11 +9,8 @@
 -- Portability : GHC
 --
 -- A migration library for hasql.
---
--- For usage, see Readme.markdown.
 
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -78,7 +75,7 @@ loadMigrationsFromDirectory dir = do
     scripts <- scriptsInDirectory dir
     forM scripts $ \f -> loadMigrationFromFile f (dir ++ "/" ++ f)
 
--- ^ load a migration from script located at the provided
+-- | load a migration from script located at the provided
 -- 'FilePath'.
 loadMigrationFromFile :: ScriptName -> FilePath -> IO MigrationCommand
 loadMigrationFromFile name fp =
