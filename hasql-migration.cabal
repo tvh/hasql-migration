@@ -1,5 +1,5 @@
 name:                       hasql-migration
-version:                    0.1.0
+version:                    0.1.1
 synopsis:                   PostgreSQL Schema Migrations
 homepage:                   https://github.com/tvh/hasql-migration
 Bug-reports:                https://github.com/tvh/hasql-migration/issues
@@ -55,5 +55,5 @@ test-suite tests
                             hasql                       >= 0.19     && < 0.20,
                             hasql-migration,
                             hasql-transaction           >= 0.4      && < 0.5,
-                            hspec                       >= 2.2      && < 2.3,
+                            hspec                       >= 2.2      && < 2.4,
                             transformers                >= 0.3      && < 0.6
