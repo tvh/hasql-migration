@@ -8,7 +8,7 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- The test entry-point for postgresql-simple-migration.
+-- The test entry-point for hasql-migration.
 
 {-# LANGUAGE OverloadedStrings #-}
 
