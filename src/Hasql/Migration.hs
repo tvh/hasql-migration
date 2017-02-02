@@ -34,21 +34,21 @@ module Hasql.Migration
     , SchemaMigration(..)
     ) where
 
-import Control.Arrow
 import Control.Applicative
+import Control.Arrow
+import Crypto.Hash (hashWith, MD5(..))
+import Data.ByteArray.Encoding
 import Data.Default.Class
 import Data.Functor.Contravariant
 import Data.List (isPrefixOf, sort)
 import Data.Monoid
-import Data.Traversable (forM)
 import Data.Time (LocalTime)
+import Data.Traversable (forM)
 import Hasql.Migration.Util (existsTable)
 import Hasql.Query
 import Hasql.Transaction
 import System.Directory (getDirectoryContents)
-import qualified Crypto.Hash.MD5 as MD5 (hash)
 import qualified Data.ByteString as BS (ByteString, readFile)
-import qualified Data.ByteString.Base64 as B64 (encode)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Hasql.Decoders as Decoders
@@ -166,7 +166,7 @@ checkScript name checksum =
 -- | Calculates the MD5 checksum of the provided bytestring in base64
 -- encoding.
 md5Hash :: BS.ByteString -> Checksum
-md5Hash = T.decodeUtf8 . B64.encode . MD5.hash
+md5Hash = T.decodeUtf8 . convertToBase Base64 . hashWith MD5
 
 -- | The checksum type of a migration script.
 type Checksum = T.Text
