@@ -22,7 +22,7 @@ import           Test.Hspec                               (hspec)
 
 main :: IO ()
 main = do
-    con <- acquire "dbname=test"
-    case con of
+    conE <- acquire "dbname=test"
+    case conE of
       Right con -> hspec (migrationSpec con)
       Left err -> putStrLn $ show err

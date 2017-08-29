@@ -29,4 +29,4 @@ existsTable table =
     fmap (not . null) $ query table q
     where
         q = statement sql (Encoders.value def) (Decoders.rowsList (Decoders.value Decoders.int8)) False
-        sql = "select count(relname) from pg_class where relname = $1"
+        sql = "select relname from pg_class where relname = $1"
