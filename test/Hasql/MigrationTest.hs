@@ -36,15 +36,15 @@ migrationSpec con = describe "Migrations" $ do
 
     it "initializes a database" $ do
         r <- runTx con $ runMigration $ MigrationInitialization
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "creates the schema_migrations table" $ do
-        r <- runTx con $ existsTable "schema_migration"
+        r <- runTx con $ existsTable "schema_migrations"
         r `shouldBe` Right True
 
     it "executes a migration script" $ do
         r <- runTx con $ runMigration $ migrationScript
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "creates the table from the executed script" $ do
         r <- runTx con $ existsTable "t1"
@@ -52,15 +52,15 @@ migrationSpec con = describe "Migrations" $ do
 
     it "skips execution of the same migration script" $ do
         r <- runTx con $ runMigration $ migrationScript
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "reports an error on a different checksum for the same script" $ do
         r <- runTx con $ runMigration $ migrationScriptAltered
-        r `shouldBe` Right (MigrationError "test.sql")
+        r `shouldBe` Right (Just (ScriptChanged "test.sql"))
 
     it "executes migration scripts inside a folder" $ do
         r <- runTx con $ runMigration $ migrationDir
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "creates the table from the executed scripts" $ do
         r <- runTx con $ existsTable "t2"
@@ -68,7 +68,7 @@ migrationSpec con = describe "Migrations" $ do
 
     it "executes a file based migration script" $ do
         r <- runTx con $ runMigration $ migrationFile
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "creates the table from the executed scripts" $ do
         r <- runTx con $ existsTable "t3"
@@ -76,19 +76,19 @@ migrationSpec con = describe "Migrations" $ do
 
     it "validates initialization" $ do
         r <- runTx con $ runMigration $ (MigrationValidation MigrationInitialization)
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "validates an executed migration script" $ do
         r <- runTx con $ runMigration $ (MigrationValidation migrationScript)
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "validates all scripts inside a folder" $ do
         r <- runTx con $ runMigration $ (MigrationValidation migrationDir)
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "validates an executed migration file" $ do
         r <- runTx con $ runMigration $ (MigrationValidation migrationFile)
-        r `shouldBe` Right MigrationSuccess
+        r `shouldBe` Right Nothing
 
     it "gets a list of executed migrations" $ do
         r <- runTx con getMigrations

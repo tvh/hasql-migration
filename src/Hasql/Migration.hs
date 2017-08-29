@@ -23,7 +23,7 @@ module Hasql.Migration
 
     -- * Migration types
     , MigrationCommand(..)
-    , MigrationResult(..)
+    , MigrationError(..)
     , ScriptName
     , Checksum
 
@@ -34,14 +34,12 @@ module Hasql.Migration
     , SchemaMigration(..)
     ) where
 
-import Control.Applicative
 import Control.Arrow
 import Crypto.Hash (hashWith, MD5(..))
 import Data.ByteArray.Encoding
 import Data.Default.Class
 import Data.Functor.Contravariant
 import Data.List (isPrefixOf, sort)
-import Data.Monoid
 import Data.Time (LocalTime)
 import Data.Traversable (forM)
 import Hasql.Migration.Util (existsTable)
@@ -59,10 +57,10 @@ import qualified Hasql.Encoders as Encoders
 -- Returns 'MigrationSuccess' if the provided 'MigrationCommand' executes
 -- without error. If an error occurs, execution is stopped and
 -- a 'MigrationError' is returned.
-runMigration :: MigrationCommand -> Transaction (MigrationResult String)
+runMigration :: MigrationCommand -> Transaction (Maybe MigrationError)
 runMigration cmd = case cmd of
     MigrationInitialization ->
-        initializeSchema >> return MigrationSuccess
+        initializeSchema >> return Nothing
     MigrationScript name contents ->
         executeMigration name contents
     MigrationValidation validationCmd ->
@@ -87,21 +85,20 @@ scriptsInDirectory :: FilePath -> IO [String]
 scriptsInDirectory dir =
     fmap (sort . filter (\x -> not $ "." `isPrefixOf` x))
         (getDirectoryContents dir)
-
 -- | Executes a generic SQL migration for the provided script 'name' with
 -- content 'contents'.
-executeMigration :: ScriptName -> BS.ByteString -> Transaction (MigrationResult String)
+executeMigration :: ScriptName -> BS.ByteString -> Transaction (Maybe MigrationError)
 executeMigration name contents = do
     let checksum = md5Hash contents
     checkScript name checksum >>= \case
         ScriptOk -> do
-            return MigrationSuccess
+            return Nothing
         ScriptNotExecuted -> do
             sql contents
             query (name, checksum) (statement q (contramap (first T.pack) def) Decoders.unit False)
-            return MigrationSuccess
+            return Nothing
         ScriptModified _ -> do
-            return (MigrationError name)
+            return (Just $ ScriptChanged name)
     where
         q = "insert into schema_migrations(filename, checksum) values($1, $2)"
 
@@ -123,25 +120,25 @@ initializeSchema = do
 -- * 'MigrationInitialization': validate the presence of the meta-information
 -- table.
 -- * 'MigrationValidation': always succeeds.
-executeValidation :: MigrationCommand -> Transaction (MigrationResult String)
+executeValidation :: MigrationCommand -> Transaction (Maybe MigrationError)
 executeValidation cmd = case cmd of
     MigrationInitialization ->
         existsTable "schema_migrations" >>= \r -> return $ if r
-            then MigrationSuccess
-            else MigrationError "No such table: schema_migrations"
+            then Nothing
+            else (Just NotInitialised)
     MigrationScript name contents ->
         validate name contents
     MigrationValidation _ ->
-        return MigrationSuccess
+        return Nothing
     where
         validate name contents =
             checkScript name (md5Hash contents) >>= \case
                 ScriptOk -> do
-                    return MigrationSuccess
+                    return Nothing
                 ScriptNotExecuted -> do
-                    return (MigrationError $ "Missing: " ++ name)
+                    return (Just $ ScriptMissing name)
                 ScriptModified _ -> do
-                    return (MigrationError $ "Checksum mismatch: " ++ name)
+                    return (Just $ ChecksumMismatch name)
 
 -- | Checks the status of the script with the given name 'name'.
 -- If the script has already been executed, the checksum of the script
@@ -198,13 +195,8 @@ data CheckScriptResult
     -- ^ The script has not been executed, yet. This is good.
     deriving (Show, Eq, Read, Ord)
 
--- | A sum-type denoting the result of a migration.
-data MigrationResult a
-    = MigrationError a
-    -- ^ There was an error in script migration.
-    | MigrationSuccess
-    -- ^ All scripts have been executed successfully.
-    deriving (Show, Eq, Read, Ord)
+-- | Errors that could occur when a migration is validated or performed
+data MigrationError = ScriptChanged String | NotInitialised | ScriptMissing String | ChecksumMismatch String deriving (Show, Eq, Read, Ord)
 
 -- | Produces a list of all executed 'SchemaMigration's.
 getMigrations :: Transaction [SchemaMigration]
