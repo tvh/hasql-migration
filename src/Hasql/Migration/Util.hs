@@ -16,17 +16,17 @@ module Hasql.Migration.Util
     ( existsTable
     ) where
 
-import           Hasql.Query
+import           Hasql.Statement
 import qualified Hasql.Encoders as Encoders
 import qualified Hasql.Decoders as Decoders
-import           Hasql.Transaction (query, Transaction)
+import           Hasql.Transaction (statement, Transaction)
 import Data.Text (Text)
 import Data.Default.Class
 
 -- | Checks if the table with the given name exists in the database.
 existsTable :: Text -> Transaction Bool
 existsTable table =
-    fmap (not . null) $ query table q
+    fmap (not . null) $ statement table q
     where
-        q = statement sql (Encoders.value def) (Decoders.rowsList (Decoders.value Decoders.int8)) False
+        q = Statement sql (Encoders.param def) (Decoders.rowList (Decoders.column Decoders.int8)) False
         sql = "select relname from pg_class where relname = $1"
