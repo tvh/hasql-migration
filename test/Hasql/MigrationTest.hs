@@ -14,7 +14,7 @@
 
 module Hasql.MigrationTest where
 
-import           Hasql.Session                        (run, Error)
+import           Hasql.Session                        (run, QueryError)
 import           Hasql.Connection
 import qualified Hasql.Transaction                    as Tx
 import qualified Hasql.Transaction.Sessions           as Tx
@@ -23,7 +23,7 @@ import           Hasql.Migration.Util                 (existsTable)
 import           Test.Hspec                           (Spec, describe, it,
                                                        shouldBe, runIO)
 
-runTx :: Connection -> Tx.Transaction a -> IO (Either Error a)
+runTx :: Connection -> Tx.Transaction a -> IO (Either QueryError a)
 runTx con act = do
     run (Tx.transaction Tx.ReadCommitted Tx.Write act) con
 

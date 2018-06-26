@@ -43,7 +43,7 @@ import Data.List (isPrefixOf, sort)
 import Data.Time (LocalTime)
 import Data.Traversable (forM)
 import Hasql.Migration.Util (existsTable)
-import Hasql.Query
+import Hasql.Statement
 import Hasql.Transaction
 import System.Directory (getDirectoryContents)
 import qualified Data.ByteString as BS (ByteString, readFile)
@@ -95,7 +95,7 @@ executeMigration name contents = do
             return Nothing
         ScriptNotExecuted -> do
             sql contents
-            query (name, checksum) (statement q (contramap (first T.pack) def) Decoders.unit False)
+            statement (name, checksum) (Statement q (contramap (first T.pack) def) Decoders.unit False)
             return Nothing
         ScriptModified _ -> do
             return (Just $ ScriptChanged name)
@@ -147,7 +147,7 @@ executeValidation cmd = case cmd of
 -- will be executed and its meta-information will be recorded.
 checkScript :: ScriptName -> Checksum -> Transaction CheckScriptResult
 checkScript name checksum =
-    query name (statement q (contramap T.pack (Encoders.value def)) (Decoders.maybeRow (Decoders.value def)) False) >>= \case
+    statement name (Statement q (contramap T.pack (Encoders.param def)) (Decoders.rowMaybe (Decoders.column def)) False) >>= \case
         Nothing ->
             return ScriptNotExecuted
         Just actualChecksum | checksum == actualChecksum ->
@@ -201,7 +201,7 @@ data MigrationError = ScriptChanged String | NotInitialised | ScriptMissing Stri
 -- | Produces a list of all executed 'SchemaMigration's.
 getMigrations :: Transaction [SchemaMigration]
 getMigrations =
-    query () $ statement q def (Decoders.rowsList decodeSchemaMigration) False
+    statement () $ Statement q def (Decoders.rowList decodeSchemaMigration) False
     where
         q = mconcat
             [ "select filename, checksum, executed_at "
@@ -225,6 +225,6 @@ instance Ord SchemaMigration where
 decodeSchemaMigration :: Decoders.Row SchemaMigration
 decodeSchemaMigration =
     SchemaMigration
-    <$> Decoders.value def
-    <*> Decoders.value def
-    <*> Decoders.value def
+    <$> Decoders.column def
+    <*> Decoders.column def
+    <*> Decoders.column def

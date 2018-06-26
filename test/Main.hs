@@ -18,7 +18,7 @@ module Main
 
 import Hasql.Connection
 import Hasql.MigrationTest
-import           Test.Hspec                               (hspec)
+import Test.Hspec (hspec)
 
 main :: IO ()
 main = do
