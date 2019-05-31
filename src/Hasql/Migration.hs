@@ -44,6 +44,7 @@ import Hasql.Migration.Util (existsTable)
 import Hasql.Statement
 import Hasql.Transaction
 import System.Directory (getDirectoryContents)
+import Data.Semigroup ((<>))
 import qualified Data.ByteString as BS (ByteString, readFile)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
