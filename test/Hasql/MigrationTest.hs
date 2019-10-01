@@ -31,7 +31,7 @@ migrationSpec :: Connection -> Spec
 migrationSpec con = describe "Migrations" $ do
     let migrationScript = MigrationScript "test.sql" q
     let migrationScriptAltered = MigrationScript "test.sql" ""
-    [migrationDir] <- runIO $ loadMigrationsFromDirectory "share/test/scripts"
+    migrationDir <- runIO $ head <$> loadMigrationsFromDirectory "share/test/scripts"
     migrationFile <- runIO $ loadMigrationFromFile "s.sql" "share/test/script.sql"
 
     it "initializes a database" $ do

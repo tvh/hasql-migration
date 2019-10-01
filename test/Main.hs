@@ -25,4 +25,4 @@ main = do
     conE <- acquire "dbname=test"
     case conE of
       Right con -> hspec (migrationSpec con)
-      Left err -> putStrLn $ show err
+      Left err -> error $ show err
