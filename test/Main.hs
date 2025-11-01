@@ -11,18 +11,28 @@
 -- The test entry-point for hasql-migration.
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 
 module Main
     ( main
     ) where
 
 import Hasql.Connection
+#if MIN_VERSION_hasql(1,9,0)
+import Hasql.Connection.Setting (connection)
+import qualified Hasql.Connection.Setting.Connection as Connection
+#endif
 import Hasql.MigrationTest
 import Test.Hspec (hspec)
 
 main :: IO ()
 main = do
-    conE <- acquire "dbname=test"
+    let connstr = "host=localhost port=5432 user=hasql password=hasql dbname=hasql-migration-test"
+#if MIN_VERSION_hasql(1,9,0)
+    conE <- acquire $ [connection . Connection.string $ connstr]
+#else
+    conE <- acquire connstr
+#endif
     case conE of
       Right con -> hspec (migrationSpec con)
       Left err -> putStrLn $ show err
