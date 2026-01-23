@@ -14,29 +14,37 @@
 
 module Hasql.MigrationTest where
 
-import           Hasql.Session                        (run, SessionError)
-import           Hasql.Connection
+import           Hasql.Errors ( SessionError )
+import           Hasql.Connection ( use, Connection )
 import qualified Hasql.Transaction                    as Tx
 import qualified Hasql.Transaction.Sessions           as Tx
-import           Hasql.Migration
+import           Hasql.Migration                      (SchemaMigration(schemaMigrationName),
+                                                        MigrationError(ScriptChanged),
+                                                        MigrationCommand(MigrationValidation, MigrationScript,
+                                                                        MigrationInitialization),
+                                                        runMigration,
+                                                        loadMigrationsFromDirectory,
+                                                        loadMigrationFromFile,
+                                                        getMigrations)
 import           Hasql.Migration.Util                 (existsTable)
 import           Test.Hspec                           (Spec, describe, it,
                                                        shouldBe, runIO)
+import Data.Maybe (listToMaybe)
 
 runTx :: Connection -> Tx.Transaction a -> IO (Either SessionError a)
 runTx con act = do
-    run (Tx.transaction Tx.ReadCommitted Tx.Write act) con
+    use con (Tx.transaction Tx.ReadCommitted Tx.Write act)
 
 migrationSpec :: Connection -> Spec
 migrationSpec con = describe "Migrations" $ do
     let migrationScript = MigrationScript "test.sql" q
     let migrationScriptAltered = MigrationScript "test.sql" ""
     mds <- runIO $ loadMigrationsFromDirectory "share/test/scripts"
-    let migrationDir = head mds 
+    migrationDir <- runIO $ maybe (fail "Expecting migration dir") pure (listToMaybe mds) 
     migrationFile <- runIO $ loadMigrationFromFile "s.sql" "share/test/script.sql"
 
     it "initializes a database" $ do
-        r <- runTx con $ runMigration $ MigrationInitialization
+        r <- runTx con $ runMigration MigrationInitialization
         r `shouldBe` Right Nothing
 
     it "creates the schema_migrations table" $ do
@@ -44,7 +52,7 @@ migrationSpec con = describe "Migrations" $ do
         r `shouldBe` Right True
 
     it "executes a migration script" $ do
-        r <- runTx con $ runMigration $ migrationScript
+        r <- runTx con $ runMigration migrationScript
         r `shouldBe` Right Nothing
 
     it "creates the table from the executed script" $ do
@@ -52,15 +60,15 @@ migrationSpec con = describe "Migrations" $ do
         r `shouldBe` Right True
 
     it "skips execution of the same migration script" $ do
-        r <- runTx con $ runMigration $ migrationScript
+        r <- runTx con $ runMigration migrationScript
         r `shouldBe` Right Nothing
 
     it "reports an error on a different checksum for the same script" $ do
-        r <- runTx con $ runMigration $ migrationScriptAltered
+        r <- runTx con $ runMigration migrationScriptAltered
         r `shouldBe` Right (Just (ScriptChanged "test.sql"))
 
     it "executes migration scripts inside a folder" $ do
-        r <- runTx con $ runMigration $ migrationDir
+        r <- runTx con $ runMigration migrationDir
         r `shouldBe` Right Nothing
 
     it "creates the table from the executed scripts" $ do
@@ -68,7 +76,7 @@ migrationSpec con = describe "Migrations" $ do
         r `shouldBe` Right True
 
     it "executes a file based migration script" $ do
-        r <- runTx con $ runMigration $ migrationFile
+        r <- runTx con $ runMigration migrationFile
         r `shouldBe` Right Nothing
 
     it "creates the table from the executed scripts" $ do
@@ -76,19 +84,19 @@ migrationSpec con = describe "Migrations" $ do
         r `shouldBe` Right True
 
     it "validates initialization" $ do
-        r <- runTx con $ runMigration $ (MigrationValidation MigrationInitialization)
+        r <- runTx con $ runMigration (MigrationValidation MigrationInitialization)
         r `shouldBe` Right Nothing
 
     it "validates an executed migration script" $ do
-        r <- runTx con $ runMigration $ (MigrationValidation migrationScript)
+        r <- runTx con $ runMigration (MigrationValidation migrationScript)
         r `shouldBe` Right Nothing
 
     it "validates all scripts inside a folder" $ do
-        r <- runTx con $ runMigration $ (MigrationValidation migrationDir)
+        r <- runTx con $ runMigration (MigrationValidation migrationDir)
         r `shouldBe` Right Nothing
 
     it "validates an executed migration file" $ do
-        r <- runTx con $ runMigration $ (MigrationValidation migrationFile)
+        r <- runTx con $ runMigration (MigrationValidation migrationFile)
         r `shouldBe` Right Nothing
 
     it "gets a list of executed migrations" $ do

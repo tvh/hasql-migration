@@ -35,21 +35,19 @@ module Hasql.Migration
     ) where
 
 import Crypto.Hash (hashWith, MD5(..))
-import Data.ByteArray.Encoding
-import Data.Functor.Contravariant
+import Data.ByteArray.Encoding ( convertToBase, Base(Base64) )
 import Data.List (isPrefixOf, sort)
 import Data.Time (LocalTime)
 import Data.Traversable (forM)
 import Hasql.Migration.Util (existsTable)
-import Hasql.Statement
-import Hasql.Transaction
+import Hasql.Statement ( unpreparable )
+import Hasql.Transaction ( sql, statement, Transaction )
 import System.Directory (getDirectoryContents)
-import Data.Semigroup ((<>))
 import qualified Data.ByteString as BS (ByteString, readFile)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Hasql.Decoders as Decoders
 import qualified Hasql.Encoders as Encoders
+import Data.Functor.Contravariant ((>$<))
 
 -- | Executes a 'MigrationCommand'.
 --
@@ -70,7 +68,7 @@ runMigration cmd = case cmd of
 loadMigrationsFromDirectory :: FilePath -> IO [MigrationCommand]
 loadMigrationsFromDirectory dir = do
     scripts <- scriptsInDirectory dir
-    forM scripts $ \f -> loadMigrationFromFile f (dir ++ "/" ++ f)
+    forM scripts $ \f -> loadMigrationFromFile (T.pack f) (dir ++ "/" ++ f)
 
 -- | load a migration from script located at the provided
 -- 'FilePath'.
@@ -94,13 +92,13 @@ executeMigration name contents = do
             return Nothing
         ScriptNotExecuted -> do
             sql contents
-            statement (name, checksum) (Statement q enc Decoders.noResult False)
+            statement (name, checksum) (unpreparable q enc Decoders.noResult)
             return Nothing
         ScriptModified _ -> do
             return (Just $ ScriptChanged name)
     where
         q = "insert into schema_migrations(filename, checksum) values($1, $2)"
-        enc = ((T.pack . fst) >$< Encoders.param (Encoders.nonNullable Encoders.text)) <> (snd >$< Encoders.param (Encoders.nonNullable Encoders.text))
+        enc = (fst >$< Encoders.param (Encoders.nonNullable Encoders.text)) <> (snd >$< Encoders.param (Encoders.nonNullable Encoders.bytea))
 
 -- | Initializes the database schema with a helper table containing
 -- meta-information about executed migrations.
@@ -108,8 +106,8 @@ initializeSchema :: Transaction ()
 initializeSchema = do
     sql $ mconcat
         [ "create table if not exists schema_migrations "
-        , "( filename varchar(512) not null"
-        , ", checksum varchar(32) not null"
+        , "( filename text not null"
+        , ", checksum bytea not null"
         , ", executed_at timestamp without time zone not null default now() "
         , ");"
         ]
@@ -125,7 +123,7 @@ executeValidation cmd = case cmd of
     MigrationInitialization ->
         existsTable "schema_migrations" >>= \r -> return $ if r
             then Nothing
-            else (Just NotInitialised)
+            else Just NotInitialised
     MigrationScript name contents ->
         validate name contents
     MigrationValidation _ ->
@@ -147,8 +145,8 @@ executeValidation cmd = case cmd of
 -- will be executed and its meta-information will be recorded.
 checkScript :: ScriptName -> Checksum -> Transaction CheckScriptResult
 checkScript name checksum =
-    statement name (Statement q (contramap T.pack (Encoders.param (Encoders.nonNullable Encoders.text))) 
-        (Decoders.rowMaybe (Decoders.column (Decoders.nonNullable Decoders.text))) False) >>= \case
+    statement name (unpreparable q (Encoders.param (Encoders.nonNullable Encoders.text)) 
+        (Decoders.rowMaybe (Decoders.column (Decoders.nonNullable Decoders.bytea)))) >>= \case
         Nothing ->
             return ScriptNotExecuted
         Just actualChecksum | checksum == actualChecksum ->
@@ -164,14 +162,14 @@ checkScript name checksum =
 -- | Calculates the MD5 checksum of the provided bytestring in base64
 -- encoding.
 md5Hash :: BS.ByteString -> Checksum
-md5Hash = T.decodeUtf8 . convertToBase Base64 . hashWith MD5
+md5Hash = convertToBase Base64 . hashWith MD5
 
 -- | The checksum type of a migration script.
-type Checksum = T.Text
+type Checksum = BS.ByteString
 
 -- | The name of a script. Typically the filename or a custom name
 -- when using Haskell migrations.
-type ScriptName = String
+type ScriptName = T.Text
 
 -- | 'MigrationCommand' determines the action of the 'runMigration' script.
 data MigrationCommand
@@ -197,12 +195,12 @@ data CheckScriptResult
     deriving (Show, Eq, Read, Ord)
 
 -- | Errors that could occur when a migration is validated or performed
-data MigrationError = ScriptChanged String | NotInitialised | ScriptMissing String | ChecksumMismatch String deriving (Show, Eq, Read, Ord)
+data MigrationError = ScriptChanged ScriptName | NotInitialised | ScriptMissing ScriptName | ChecksumMismatch ScriptName deriving (Show, Eq, Read, Ord)
 
 -- | Produces a list of all executed 'SchemaMigration's.
 getMigrations :: Transaction [SchemaMigration]
 getMigrations =
-    statement () $ Statement q Encoders.noParams (Decoders.rowList decodeSchemaMigration) False
+    statement () $ unpreparable q Encoders.noParams (Decoders.rowList decodeSchemaMigration)
     where
         q = mconcat
             [ "select filename, checksum, executed_at "
@@ -211,7 +209,7 @@ getMigrations =
 
 -- | A product type representing a single, executed 'SchemaMigration'.
 data SchemaMigration = SchemaMigration
-    { schemaMigrationName       :: BS.ByteString
+    { schemaMigrationName       :: ScriptName
     -- ^ The name of the executed migration.
     , schemaMigrationChecksum   :: Checksum
     -- ^ The calculated MD5 checksum of the executed script.
@@ -226,6 +224,6 @@ instance Ord SchemaMigration where
 decodeSchemaMigration :: Decoders.Row SchemaMigration
 decodeSchemaMigration =
     SchemaMigration
-    <$> Decoders.column (Decoders.nonNullable Decoders.bytea)
-    <*> Decoders.column (Decoders.nonNullable Decoders.text)
+    <$> Decoders.column (Decoders.nonNullable Decoders.text)
+    <*> Decoders.column (Decoders.nonNullable Decoders.bytea)
     <*> Decoders.column (Decoders.nonNullable Decoders.timestamp)
