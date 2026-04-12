@@ -14,25 +14,34 @@
 
 module Hasql.MigrationTest where
 
-import           Hasql.Session                        (run, SessionError)
-import           Hasql.Connection
+import           Hasql.Connection ( Connection, use )
 import qualified Hasql.Transaction                    as Tx
 import qualified Hasql.Transaction.Sessions           as Tx
-import           Hasql.Migration
+import           Hasql.Migration (
+                  SchemaMigration(schemaMigrationName),
+                  MigrationError(ScriptChanged),
+                  MigrationCommand(MigrationValidation, MigrationScript,
+                                    MigrationInitialization),
+                  runMigration,
+                  loadMigrationsFromDirectory,
+                  loadMigrationFromFile,
+                  getMigrations )
 import           Hasql.Migration.Util                 (existsTable)
 import           Test.Hspec                           (Spec, describe, it,
                                                        shouldBe, runIO)
+import Hasql.Errors (SessionError)
+import Data.Maybe (listToMaybe)
 
 runTx :: Connection -> Tx.Transaction a -> IO (Either SessionError a)
 runTx con act = do
-    run (Tx.transaction Tx.ReadCommitted Tx.Write act) con
+    use con (Tx.transaction Tx.ReadCommitted Tx.Write act)
 
 migrationSpec :: Connection -> Spec
 migrationSpec con = describe "Migrations" $ do
     let migrationScript = MigrationScript "test.sql" q
     let migrationScriptAltered = MigrationScript "test.sql" ""
     mds <- runIO $ loadMigrationsFromDirectory "share/test/scripts"
-    let migrationDir = head mds 
+    migrationDir <- runIO $ maybe (fail "Expecting migration dir") pure (listToMaybe mds)
     migrationFile <- runIO $ loadMigrationFromFile "s.sql" "share/test/script.sql"
 
     it "initializes a database" $ do

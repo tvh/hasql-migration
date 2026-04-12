@@ -44,7 +44,6 @@ import Hasql.Migration.Util (existsTable)
 import Hasql.Statement
 import Hasql.Transaction
 import System.Directory (getDirectoryContents)
-import Data.Semigroup ((<>))
 import qualified Data.ByteString as BS (ByteString, readFile)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -94,7 +93,7 @@ executeMigration name contents = do
             return Nothing
         ScriptNotExecuted -> do
             sql contents
-            statement (name, checksum) (Statement q enc Decoders.noResult False)
+            statement (name, checksum) (unpreparable q enc Decoders.noResult)
             return Nothing
         ScriptModified _ -> do
             return (Just $ ScriptChanged name)
@@ -147,8 +146,8 @@ executeValidation cmd = case cmd of
 -- will be executed and its meta-information will be recorded.
 checkScript :: ScriptName -> Checksum -> Transaction CheckScriptResult
 checkScript name checksum =
-    statement name (Statement q (contramap T.pack (Encoders.param (Encoders.nonNullable Encoders.text))) 
-        (Decoders.rowMaybe (Decoders.column (Decoders.nonNullable Decoders.text))) False) >>= \case
+    statement name (unpreparable q (contramap T.pack (Encoders.param (Encoders.nonNullable Encoders.text))) 
+        (Decoders.rowMaybe (Decoders.column (Decoders.nonNullable Decoders.text)))) >>= \case
         Nothing ->
             return ScriptNotExecuted
         Just actualChecksum | checksum == actualChecksum ->
@@ -157,7 +156,7 @@ checkScript name checksum =
             return (ScriptModified actualChecksum)
     where
         q = mconcat
-            [ "select checksum from schema_migrations "
+            [ "select checksum :: text from schema_migrations "
             , "where filename = $1 limit 1"
             ]
 
@@ -202,16 +201,16 @@ data MigrationError = ScriptChanged String | NotInitialised | ScriptMissing Stri
 -- | Produces a list of all executed 'SchemaMigration's.
 getMigrations :: Transaction [SchemaMigration]
 getMigrations =
-    statement () $ Statement q Encoders.noParams (Decoders.rowList decodeSchemaMigration) False
+    statement () $ unpreparable q Encoders.noParams (Decoders.rowList decodeSchemaMigration)
     where
         q = mconcat
-            [ "select filename, checksum, executed_at "
+            [ "select filename :: text, checksum :: text, executed_at "
             , "from schema_migrations order by executed_at asc"
             ]
 
 -- | A product type representing a single, executed 'SchemaMigration'.
 data SchemaMigration = SchemaMigration
-    { schemaMigrationName       :: BS.ByteString
+    { schemaMigrationName       :: T.Text
     -- ^ The name of the executed migration.
     , schemaMigrationChecksum   :: Checksum
     -- ^ The calculated MD5 checksum of the executed script.
@@ -226,6 +225,6 @@ instance Ord SchemaMigration where
 decodeSchemaMigration :: Decoders.Row SchemaMigration
 decodeSchemaMigration =
     SchemaMigration
-    <$> Decoders.column (Decoders.nonNullable Decoders.bytea)
+    <$> Decoders.column (Decoders.nonNullable Decoders.text)
     <*> Decoders.column (Decoders.nonNullable Decoders.text)
     <*> Decoders.column (Decoders.nonNullable Decoders.timestamp)
