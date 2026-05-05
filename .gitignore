@@ -8,3 +8,4 @@ dist/
 cabal.sandbox.config
 stack.yaml
 .stack-work
+dist-newstyle

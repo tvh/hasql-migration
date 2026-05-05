@@ -13,11 +13,14 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Hasql.Migration
     (
     -- * Migration actions
     runMigration
+    , runMigrationWithoutTransactions
+    , runMigrationWith
     , loadMigrationFromFile
     , loadMigrationsFromDirectory
 
@@ -44,12 +47,14 @@ import Hasql.Migration.Util (existsTable)
 import Hasql.Statement
 import Hasql.Transaction
 import System.Directory (getDirectoryContents)
-import Data.Semigroup ((<>))
 import qualified Data.ByteString as BS (ByteString, readFile)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Hasql.Decoders as Decoders
 import qualified Hasql.Encoders as Encoders
+import Hasql.Session (Session)
+import Data.ByteString (ByteString)
+import qualified Hasql.Session as Session
 
 -- | Executes a 'MigrationCommand'.
 --
@@ -57,13 +62,25 @@ import qualified Hasql.Encoders as Encoders
 -- without error. If an error occurs, execution is stopped and
 -- a 'MigrationError' is returned.
 runMigration :: MigrationCommand -> Transaction (Maybe MigrationError)
-runMigration cmd = case cmd of
+runMigration = runMigrationWith sql statement
+
+-- | Like 'runMigration', but does not use transactions. Using this function can
+-- cause the DB to become inconsitent. However, it might be required for
+-- migrations which cannot be run in transactions, e.g. 'CREATE INDEX
+-- CONCURRENTLY'.
+runMigrationWithoutTransactions :: MigrationCommand -> Session (Maybe MigrationError)
+runMigrationWithoutTransactions = runMigrationWith Session.sql Session.statement
+
+-- | Like 'runMigrations', but runs plain sql and 'Statement's using the
+-- provided functions.
+runMigrationWith :: Monad m => (ByteString -> m ()) -> (forall a b. a -> Statement a b -> m b) -> MigrationCommand -> m (Maybe MigrationError)
+runMigrationWith executeSql executeStatement cmd = case cmd of
     MigrationInitialization ->
-        initializeSchema >> return Nothing
+        initializeSchemaWith executeSql >> return Nothing
     MigrationScript name contents ->
-        executeMigration name contents
+        executeMigrationWith executeSql executeStatement name contents
     MigrationValidation validationCmd ->
-        executeValidation validationCmd
+        executeValidationWith executeStatement validationCmd
 
 -- | Load migrations from SQL scripts in the provided 'FilePath'
 -- in alphabetical order.
@@ -84,17 +101,18 @@ scriptsInDirectory :: FilePath -> IO [String]
 scriptsInDirectory dir =
     fmap (sort . filter (\x -> not $ "." `isPrefixOf` x))
         (getDirectoryContents dir)
+
 -- | Executes a generic SQL migration for the provided script 'name' with
 -- content 'contents'.
-executeMigration :: ScriptName -> BS.ByteString -> Transaction (Maybe MigrationError)
-executeMigration name contents = do
+executeMigrationWith :: Monad m => (ByteString -> m ()) -> (forall a b. a -> Statement a b -> m b) -> ScriptName -> BS.ByteString -> m (Maybe MigrationError)
+executeMigrationWith executeSql executeStatement name contents = do
     let checksum = md5Hash contents
-    checkScript name checksum >>= \case
+    checkScriptWith executeStatement name checksum >>= \case
         ScriptOk -> do
             return Nothing
         ScriptNotExecuted -> do
-            sql contents
-            statement (name, checksum) (Statement q enc Decoders.noResult False)
+            executeSql contents
+            executeStatement (name, checksum) (Statement q enc Decoders.noResult False)
             return Nothing
         ScriptModified _ -> do
             return (Just $ ScriptChanged name)
@@ -102,11 +120,13 @@ executeMigration name contents = do
         q = "insert into schema_migrations(filename, checksum) values($1, $2)"
         enc = ((T.pack . fst) >$< Encoders.param (Encoders.nonNullable Encoders.text)) <> (snd >$< Encoders.param (Encoders.nonNullable Encoders.text))
 
+
+
 -- | Initializes the database schema with a helper table containing
 -- meta-information about executed migrations.
-initializeSchema :: Transaction ()
-initializeSchema = do
-    sql $ mconcat
+initializeSchemaWith :: Monad m => (ByteString -> m ()) -> m ()
+initializeSchemaWith executeSql = do
+    executeSql $ mconcat
         [ "create table if not exists schema_migrations "
         , "( filename varchar(512) not null"
         , ", checksum varchar(32) not null"
@@ -120,10 +140,10 @@ initializeSchema = do
 -- * 'MigrationInitialization': validate the presence of the meta-information
 -- table.
 -- * 'MigrationValidation': always succeeds.
-executeValidation :: MigrationCommand -> Transaction (Maybe MigrationError)
-executeValidation cmd = case cmd of
+executeValidationWith :: Monad m => (forall a b. a -> Statement a b -> m b) -> MigrationCommand -> m (Maybe MigrationError)
+executeValidationWith executeStatement cmd = case cmd of
     MigrationInitialization ->
-        existsTable "schema_migrations" >>= \r -> return $ if r
+        executeStatement "schema_migrations" existsTable  >>= \r -> return $ if r
             then Nothing
             else (Just NotInitialised)
     MigrationScript name contents ->
@@ -132,7 +152,7 @@ executeValidation cmd = case cmd of
         return Nothing
     where
         validate name contents =
-            checkScript name (md5Hash contents) >>= \case
+            checkScriptWith executeStatement name (md5Hash contents) >>= \case
                 ScriptOk -> do
                     return Nothing
                 ScriptNotExecuted -> do
@@ -140,15 +160,16 @@ executeValidation cmd = case cmd of
                 ScriptModified _ -> do
                     return (Just $ ChecksumMismatch name)
 
+
+
 -- | Checks the status of the script with the given name 'name'.
 -- If the script has already been executed, the checksum of the script
 -- is compared against the one that was executed.
 -- If there is no matching script entry in the database, the script
 -- will be executed and its meta-information will be recorded.
-checkScript :: ScriptName -> Checksum -> Transaction CheckScriptResult
-checkScript name checksum =
-    statement name (Statement q (contramap T.pack (Encoders.param (Encoders.nonNullable Encoders.text))) 
-        (Decoders.rowMaybe (Decoders.column (Decoders.nonNullable Decoders.text))) False) >>= \case
+checkScriptWith :: Monad m => (forall a b. a ->  Statement a b -> m b) -> ScriptName -> Checksum -> m CheckScriptResult
+checkScriptWith executeStatement name checksum =
+    executeStatement name (Statement q (contramap T.pack (Encoders.param (Encoders.nonNullable Encoders.text))) (Decoders.rowMaybe (Decoders.column (Decoders.nonNullable Decoders.text))) False) >>= \case
         Nothing ->
             return ScriptNotExecuted
         Just actualChecksum | checksum == actualChecksum ->
